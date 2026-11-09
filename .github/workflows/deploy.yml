@@ -49,6 +49,32 @@ jobs:
           chmod 600 ~/.ssh/deploy_cicd
           ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
 
+      - name: Préparer les variables PostgreSQL
+        env:
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          {
+            printf 'DB_HOST=%s\n' "$DB_HOST"
+            printf 'DB_NAME=%s\n' "$DB_NAME"
+            printf 'DB_USER=%s\n' "$DB_USER"
+            printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+          } > db.env
+          chmod 600 db.env
+
+      - name: Transférer les variables sur Azure
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          scp -i ~/.ssh/deploy_cicd \
+            -o BatchMode=yes \
+            db.env "$SSH_USER@$SSH_HOST:~/db.env"
+
+          rm -f db.env
+
       - name: Déployer sur Azure
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
@@ -58,12 +84,16 @@ jobs:
             -o BatchMode=yes \
             "$SSH_USER@$SSH_HOST" \
             "set -e
+             chmod 600 ~/db.env
              docker pull ghcr.io/alesbesdria/ws-cicd-melissa:${GITHUB_SHA}
              docker rm -f webapp || true
              docker run -d \
                --name webapp \
                --restart unless-stopped \
+               --env-file ~/db.env \
                -p 80:5000 \
                ghcr.io/alesbesdria/ws-cicd-melissa:${GITHUB_SHA}
              sleep 5
-             curl --fail --retry-all-errors --retry 10 --retry-delay 3 http://localhost/health"
+             curl --fail --retry-all-errors --retry 10 --retry-delay 3 http://localhost/health
+             curl --fail --retry-all-errors --retry 5 --retry-delay 3 http://localhost/db"
+
