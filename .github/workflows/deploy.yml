@@ -47,4 +47,5 @@ jobs:
               --restart unless-stopped \
               -p 80:5000 \
               ghcr.io/alesbesdria/ws-cicd-melissa:latest
-            curl --fail --retry 5 --retry-delay 2 http://localhost/health
+            sleep 5
+            curl --fail --retry-all-errors --retry 10 --retry-delay 3 http://localhost/health
